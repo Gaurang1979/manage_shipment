@@ -8,6 +8,8 @@ app_version = "0.1.0"
 
 required_apps = ["erpnext"]
 
+after_install = "manage_shipment.manage_shipment.setup.after_install"
+
 add_to_apps_screen = [{
     "name": "manage_shipment",
     "title": "Manage Shipment",
