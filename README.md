@@ -30,7 +30,7 @@ ERPNext v16 application for managing domestic shipments, courier providers, trac
 
 The application deliberately does **not** pretend that every courier has the same API. Each provider can be configured independently with its endpoint, method, parameter name, credentials and headers. Provider-specific adapters can be added without changing Shipment or the dashboard.
 
-Delhivery currently provides a client developer portal with shipment tracking APIs and API-token authentication; its current documentation should be used when configuring the production endpoint and token for a customer account. citeturn1search0turn1search1
+Delhivery provides a client developer portal with shipment tracking APIs and API-token authentication. Configure the current production endpoint and token supplied for the customer's Delhivery account before enabling the integration.
 
 ## Installation
 
@@ -50,12 +50,13 @@ After installation, open **Manage Shipment** from the Apps screen or `/app/shipm
 1. Open **Courier Service Provider**.
 2. Select a provider.
 3. Keep **Integration Enabled** disabled until its API endpoint and credentials are configured.
-4. Set **Adapter Python Path** to:
-   `manage_shipment.manage_shipment.integrations.generic.GenericHTTPAdapter`
+4. Set **Adapter Python Path** to `manage_shipment.manage_shipment.integrations.generic.GenericHTTPAdapter`.
 5. Configure API URL, HTTP method, tracking parameter, API token/key and any required JSON headers.
 6. Test one AWB from Shipment using **Refresh Tracking**.
 
-Frappe provides standard REST APIs for DocTypes and supports scheduled jobs through `scheduler_events`; the app uses those framework facilities rather than modifying ERPNext core. citeturn0search0turn0search1
+## Delivery Note integration
+
+After installing the app and running migration, Delivery Note gets shipment fields for Courier Service Provider and Tracking / AWB Number. When a submitted Delivery Note has both values, Manage Shipment automatically creates or links a Shipment record.
 
 ## Safety / credentials
 
