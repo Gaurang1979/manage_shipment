@@ -1,0 +1,18 @@
+{
+ "doctype":"DocType",
+ "istable":1,
+ "editable_grid":1,
+ "engine":"InnoDB",
+ "field_order":["event_datetime","status","courier_status","event_code","location","remarks"],
+ "fields":[
+  {"fieldname":"event_datetime","fieldtype":"Datetime","label":"Date & Time","reqd":1},
+  {"fieldname":"status","fieldtype":"Select","label":"Status","options":"Created\nPicked Up\nIn Transit\nArrived at Destination Hub\nOut for Delivery\nDelivered\nDelivery Attempted\nNDR / Delivery Exception\nAddress Issue\nCustomer Unavailable\nHeld\nDelayed\nLost\nRTO Initiated\nRTO In Transit\nRTO Delivered\nCancelled"},
+  {"fieldname":"courier_status","fieldtype":"Data","label":"Courier Status"},
+  {"fieldname":"event_code","fieldtype":"Data","label":"Event Code"},
+  {"fieldname":"location","fieldtype":"Data","label":"Location"},
+  {"fieldname":"remarks","fieldtype":"Small Text","label":"Remarks"}
+ ],
+ "module":"Manage Shipment",
+ "name":"Shipment Event",
+ "permissions":[]
+}
