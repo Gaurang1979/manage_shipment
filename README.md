@@ -26,6 +26,19 @@ ERPNext v16 application for managing domestic shipments, courier providers, trac
 - Configurable tracking URL template
 - Initial provider master for Trackon, Shree Maruti, DTDC, Anjani, Professional Couriers, Delhivery, Blue Dart, India Post / Speed Post, XpressBees, Ecom Express, Gati, Safexpress, Ekart and Shadowfax
 
+## Documentation and user training
+
+All operational documentation is maintained in the [`docs`](docs/) folder:
+
+- [Documentation Index](docs/README.md)
+- [Module Process](docs/MODULE_PROCESS.md)
+- [Settings Guide](docs/SETTINGS.md)
+- [User Help](docs/USER_HELP.md)
+- [Shipment User Training Flowchart](docs/USER_TRAINING_FLOWCHART.svg)
+- [Courier Setup Flowchart](docs/COURIER_SETUP_FLOWCHART.svg)
+
+The SVG flowcharts can be opened directly in a browser and used during user training or included in internal training material.
+
 ## Courier API integrations
 
 The application deliberately does **not** pretend that every courier has the same API. Each provider can be configured independently with its endpoint, method, parameter name, credentials and headers. Provider-specific adapters can be added without changing Shipment or the dashboard.
@@ -70,4 +83,4 @@ API credentials are stored in Password fields. Do not commit provider tokens, AP
 
 ## Development status
 
-Core application, dashboard, scheduling, generic integration framework and Delivery Note linkage are implemented. Courier-specific production adapters should only be enabled after verifying the provider's current API contract and account credentials.
+Core application, dashboard, scheduling, generic integration framework, Delivery Note linkage and user documentation are implemented. Courier-specific production adapters should only be enabled after verifying the provider's current API contract and account credentials.
