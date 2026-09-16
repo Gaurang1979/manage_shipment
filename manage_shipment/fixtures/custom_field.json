@@ -1,0 +1,6 @@
+[
+  {"doctype":"Custom Field","dt":"Delivery Note","fieldname":"shipment_tracking_section","fieldtype":"Section Break","label":"Shipment Tracking","insert_after":"lr_date","module":"Manage Shipment"},
+  {"doctype":"Custom Field","dt":"Delivery Note","fieldname":"shipment_courier_service_provider","fieldtype":"Link","label":"Courier Service Provider","options":"Courier Service Provider","insert_after":"shipment_tracking_section","module":"Manage Shipment"},
+  {"doctype":"Custom Field","dt":"Delivery Note","fieldname":"shipment_tracking_id","fieldtype":"Data","label":"Tracking / AWB Number","insert_after":"shipment_courier_service_provider","module":"Manage Shipment"},
+  {"doctype":"Custom Field","dt":"Delivery Note","fieldname":"shipment_reference","fieldtype":"Link","label":"Shipment","options":"Shipment","read_only":1,"insert_after":"shipment_tracking_id","module":"Manage Shipment"}
+]
