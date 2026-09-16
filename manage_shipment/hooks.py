@@ -10,10 +10,15 @@ required_apps = ["erpnext"]
 
 add_to_apps_screen = [{
     "name": "manage_shipment",
-    "logo": "/assets/manage_shipment/images/manage-shipment.svg",
     "title": "Manage Shipment",
-    "route": "/app/shipment"
+    "route": "/app/shipment-dashboard"
 }]
+
+app_include_css = "/assets/manage_shipment/css/manage_shipment.css"
+
+doctype_js = {
+    "Shipment": "public/js/shipment.js"
+}
 
 scheduler_events = {
     "all": [
