@@ -1,0 +1,18 @@
+{
+ "content":"manage_shipment/manage_shipment/page/shipment_dashboard/shipment_dashboard.html",
+ "creation":"2026-09-16 00:00:00.000000",
+ "docstatus":0,
+ "doctype":"Page",
+ "idx":0,
+ "modified":"2026-09-16 00:00:00.000000",
+ "modified_by":"Administrator",
+ "module":"Manage Shipment",
+ "name":"shipment-dashboard",
+ "owner":"Administrator",
+ "page_name":"shipment-dashboard",
+ "roles":[],
+ "script":"manage_shipment/manage_shipment/page/shipment_dashboard/shipment_dashboard.js",
+ "standard":true,
+ "system_page":0,
+ "title":"Shipment Dashboard"
+}
