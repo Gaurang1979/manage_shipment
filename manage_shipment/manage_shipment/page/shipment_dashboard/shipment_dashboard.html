@@ -1,12 +1,12 @@
 <div class="shipment-dashboard">
   <div class="shipment-dashboard-header">
-    <div>
-      <h2>Manage Shipment</h2>
-      <div class="text-muted">Domestic shipment visibility, exceptions and follow-ups</div>
-    </div>
-    <button class="btn btn-primary btn-new-shipment">New Shipment</button>
+    <div><h2>Manage Shipment</h2><div class="text-muted">Shipment visibility, delivery exceptions, ageing and follow-ups</div></div>
+    <div class="shipment-dashboard-actions"><button class="btn btn-default btn-bulk-refresh">Refresh Selected</button><button class="btn btn-primary btn-new-shipment">New Shipment</button></div>
   </div>
   <div class="shipment-filters row"></div>
   <div class="shipment-kpis row"></div>
-  <div class="shipment-table-wrap"></div>
+  <div class="shipment-dashboard-grid">
+    <div class="shipment-panel shipment-table-panel"><div class="shipment-panel-title"><span>Shipments</span><span class="text-muted shipment-result-count"></span></div><div class="shipment-table-wrap"></div></div>
+    <div class="shipment-panel"><div class="shipment-panel-title">Status Summary</div><div class="shipment-status-summary"></div><div class="shipment-followup-summary"></div></div>
+  </div>
 </div>
