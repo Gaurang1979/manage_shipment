@@ -1,82 +1,49 @@
 frappe.pages['shipment-dashboard'].on_page_load = function(wrapper) {
     const page = frappe.ui.make_app_page({parent: wrapper, title: __('Manage Shipment'), single_column: true});
     $(frappe.render_template('shipment_dashboard', {})).appendTo(page.main);
+    const root = $(page.main), filters = root.find('.shipment-filters'), kpis = root.find('.shipment-kpis'), table = root.find('.shipment-table-wrap');
+    const summary = root.find('.shipment-status-summary'), followup = root.find('.shipment-followup-summary');
+    let currentRows = [];
 
-    const root = $(page.main);
-    const filters = root.find('.shipment-filters');
-    const kpis = root.find('.shipment-kpis');
-    const table = root.find('.shipment-table-wrap');
-
-    function make_filter(fieldname, label, options) {
-        const control = frappe.ui.form.make_control({
-            parent: $('<div class="col-sm-3"></div>').appendTo(filters),
-            df: {fieldname, label, fieldtype: 'Select', options: [''].concat(options || [])},
-            render_input: true
-        });
-        control.refresh();
-        return control;
+    function make_filter(fieldname, label, options, type='Select') {
+        const holder = $('<div class="col-md-3 col-sm-6"></div>').appendTo(filters);
+        const df = {fieldname, label, fieldtype: type, options: options ? [''].concat(options) : undefined};
+        const control = frappe.ui.form.make_control({parent: holder, df, render_input: true}); control.refresh(); return control;
     }
-
-    const courier = make_filter('courier', __('Courier Service Provider'), []);
-    const status = make_filter('status', __('Status'), ['Created','Picked Up','In Transit','Arrived at Destination Hub','Out for Delivery','Delivered','Delivery Attempted','NDR / Delivery Exception','Delayed','RTO Initiated','RTO In Transit','RTO Delivered','Cancelled']);
-    const follow_up = make_filter('follow_up', __('Follow-up'), ['1', '0']);
+    const courier = make_filter('courier', __('Courier'), []);
+    const status = make_filter('status', __('Status'), ['Created','Picked Up','In Transit','Arrived at Destination Hub','Out for Delivery','Delivered','Delivery Attempted','NDR / Delivery Exception','Address Issue','Customer Unavailable','Held','Delayed','Lost','RTO Initiated','RTO In Transit','RTO Delivered','Cancelled']);
+    const follow_up = make_filter('follow_up', __('Follow-up'), ['1','0']);
+    const company = make_filter('company', __('Company'), []);
+    const from_date = make_filter('from_date', __('From Date'), null, 'Date');
+    const to_date = make_filter('to_date', __('To Date'), null, 'Date');
 
     root.find('.btn-new-shipment').on('click', () => frappe.new_doc('Shipment'));
+    root.find('.btn-bulk-refresh').on('click', bulk_refresh);
+    [courier,status,follow_up,company,from_date,to_date].forEach(c => c.$input && c.$input.on('change', load));
 
     function load() {
-        frappe.call({
-            method: 'manage_shipment.manage_shipment.api.get_dashboard_data',
-            args: {courier: courier.get_value(), status: status.get_value(), follow_up: follow_up.get_value()},
-            callback(r) {
-                const data = r.message || {counts: {}, rows: []};
-                render_kpis(data.counts || {});
-                render_table(data.rows || []);
-            }
-        });
+        frappe.call({method:'manage_shipment.manage_shipment.api.get_dashboard_data', args:{courier:courier.get_value(),status:status.get_value(),follow_up:follow_up.get_value(),company:company.get_value(),from_date:from_date.get_value(),to_date:to_date.get_value()}, callback(r){
+            const data=r.message||{counts:{},rows:[]}; currentRows=data.rows||[]; render_kpis(data.counts||{}); render_table(currentRows); render_summary(currentRows,data.counts||{});
+        }});
     }
-
-    function render_kpis(counts) {
-        const items = [
-            ['Total Shipments', 'Total Shipments'], ['In Transit', 'In Transit'],
-            ['Out for Delivery', 'Out for Delivery'], ['Delivered', 'Delivered'],
-            ['NDR / Delivery Exception', 'NDR / Exception'], ['Delayed', 'Delayed'],
-            ['RTO Initiated', 'RTO'], ['Follow-up Required', 'Follow-up']
-        ];
-        kpis.empty();
-        items.forEach(([key, label]) => {
-            $(`<div class="col-sm-3 col-md-3 shipment-kpi"><div class="shipment-kpi-card"><div class="text-muted">${__(label)}</div><div class="shipment-kpi-value">${counts[key] || 0}</div></div></div>`).appendTo(kpis);
-        });
+    function render_kpis(c) {
+        const items=[['Total Shipments','Total Shipments'],['In Transit','In Transit'],['Out for Delivery','Out for Delivery'],['Delivered','Delivered'],['NDR / Delivery Exception','NDR / Exception'],['Delayed','Delayed'],['RTO In Transit','RTO'],['Follow-up Required','Follow-up'],['Follow-up Overdue','Overdue'],['Not Updated 24h+','No Update 24h+']];
+        kpis.empty(); items.forEach(([key,label])=>kpis.append(`<div class="col-lg-2 col-md-3 col-sm-4 shipment-kpi"><div class="shipment-kpi-card"><div class="text-muted small">${__(label)}</div><div class="shipment-kpi-value">${c[key]||0}</div></div></div>`));
     }
-
     function render_table(rows) {
-        if (!rows.length) {
-            table.html(`<div class="text-muted text-center p-5">${__('No shipments found')}</div>`);
-            return;
-        }
-        const body = rows.map(r => `<tr>
-            <td><a href="/app/shipment/${encodeURIComponent(r.name)}">${frappe.utils.escape_html(r.tracking_id || r.name)}</a></td>
-            <td>${frappe.utils.escape_html(r.courier_service_provider || '')}</td>
-            <td>${frappe.utils.escape_html(r.consignee_name || '')}</td>
-            <td><span class="indicator-pill ${status_class(r.status)}">${frappe.utils.escape_html(r.status || '')}</span></td>
-            <td>${frappe.utils.escape_html(r.current_location || '')}</td>
-            <td>${frappe.utils.escape_html(r.expected_delivery_date || '')}</td>
-            <td>${r.follow_up_required ? '<span class="indicator-pill red">Follow-up</span>' : ''}</td>
-        </tr>`).join('');
-        table.html(`<div class="table-responsive"><table class="table table-bordered table-hover"><thead><tr><th>AWB / Tracking</th><th>Courier</th><th>Consignee</th><th>Status</th><th>Location</th><th>Expected Delivery</th><th>Action</th></tr></thead><tbody>${body}</tbody></table></div>`);
+        root.find('.shipment-result-count').text(`${rows.length} records`);
+        if(!rows.length){table.html(`<div class="text-muted text-center p-5">${__('No shipments found')}</div>`);return;}
+        const body=rows.map(r=>`<tr><td><input type="checkbox" class="shipment-select" data-name="${frappe.utils.escape_html(r.name)}"></td><td><a href="/app/shipment/${encodeURIComponent(r.name)}">${frappe.utils.escape_html(r.tracking_id||r.name)}</a><div class="text-muted small">${frappe.utils.escape_html(r.courier_service_provider||'')}</div></td><td>${frappe.utils.escape_html(r.consignee_name||r.customer||'')}</td><td><span class="indicator-pill ${status_class(r.status)}">${frappe.utils.escape_html(r.status||'')}</span><div class="text-muted small">${frappe.utils.escape_html(r.courier_status||'')}</div></td><td>${frappe.utils.escape_html(r.current_location||'')}</td><td>${frappe.utils.escape_html(r.expected_delivery_date||'')}<div class="text-muted small">${frappe.utils.escape_html(r.last_tracked_on||'')}</div></td><td>${r.follow_up_required?'<span class="indicator-pill red">Follow-up</span>':''}${r.follow_up_overdue?'<span class="indicator-pill orange ml-1">Overdue</span>':''}</td></tr>`).join('');
+        table.html(`<div class="table-responsive"><table class="table table-bordered table-hover"><thead><tr><th></th><th>AWB / Tracking</th><th>Consignee</th><th>Status</th><th>Location</th><th>Delivery / Updated</th><th>Action</th></tr></thead><tbody>${body}</tbody></table></div>`);
     }
-
-    function status_class(value) {
-        if (value === 'Delivered' || value === 'RTO Delivered') return 'green';
-        if (value === 'Delayed' || value === 'NDR / Delivery Exception' || value === 'Lost') return 'red';
-        if (value === 'Out for Delivery') return 'orange';
-        return 'blue';
+    function render_summary(rows,c) {
+        const groups={}; rows.forEach(r=>groups[r.status]=(groups[r.status]||0)+1);
+        const total=rows.length||1; summary.empty(); Object.keys(groups).sort((a,b)=>groups[b]-groups[a]).slice(0,10).forEach(s=>summary.append(`<div class="shipment-summary-row"><div><span class="indicator-pill ${status_class(s)}">${frappe.utils.escape_html(s)}</span></div><div class="shipment-summary-count">${groups[s]} <span class="text-muted small">(${Math.round(groups[s]*100/total)}%)</span></div></div>`));
+        followup.html(`<div class="shipment-followup-box"><div><strong>${c['Follow-up Required']||0}</strong><span>Follow-up Required</span></div><div><strong>${c['Follow-up Overdue']||0}</strong><span>Overdue</span></div><div><strong>${c['Not Updated 24h+']||0}</strong><span>No Update 24h+</span></div></div>`);
     }
+    function status_class(v){if(v==='Delivered'||v==='RTO Delivered')return'green';if(['Delayed','NDR / Delivery Exception','Lost','Address Issue'].includes(v))return'red';if(v==='Out for Delivery')return'orange';return'blue';}
+    function bulk_refresh(){const names=[];root.find('.shipment-select:checked').each(function(){names.push($(this).data('name'));});if(!names.length){frappe.msgprint(__('Select at least one shipment.'));return;}frappe.call({method:'manage_shipment.manage_shipment.api.bulk_refresh_shipments',args:{shipments:names},freeze:true,freeze_message:__('Refreshing shipments...'),callback(){load();}});}
 
-    [courier, status, follow_up].forEach(c => c.$input.on('change', load));
-    frappe.call({method: 'frappe.client.get_list', args: {doctype: 'Courier Service Provider', fields: ['name'], filters: {enabled: 1}, limit_page_length: 100}, callback(r) {
-        const names = (r.message || []).map(x => x.name);
-        courier.df.options = [''].concat(names);
-        courier.refresh();
-        load();
-    }});
+    frappe.call({method:'frappe.client.get_list',args:{doctype:'Courier Service Provider',fields:['name'],filters:{enabled:1},limit_page_length:100},callback(r){courier.df.options=[''].concat((r.message||[]).map(x=>x.name));courier.refresh();load();}});
+    frappe.call({method:'frappe.client.get_list',args:{doctype:'Company',fields:['name'],limit_page_length:100},callback(r){company.df.options=[''].concat((r.message||[]).map(x=>x.name));company.refresh();}});
 };
