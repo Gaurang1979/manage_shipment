@@ -1,11 +1,6 @@
 {
- "actions": [],
- "allow_rename": 1,
- "autoname": "format:SHIP-{YYYY}-{#####}",
- "creation": "2026-09-16 00:00:00.000000",
- "doctype": "DocType",
- "engine": "InnoDB",
- "field_order": ["section_shipment", "courier_service_provider", "tracking_id", "shipment_date", "shipment_type", "status", "column_1", "expected_delivery_date", "actual_delivery_date", "tracking_enabled", "last_tracked_on", "courier_status", "current_location", "section_party", "customer", "consignee_name", "consignee_phone", "consignee_email", "address", "city", "state", "pincode", "section_reference", "company", "branch", "reference_doctype", "reference_name", "section_followup", "follow_up_required", "follow_up_date", "follow_up_person", "follow_up_status", "follow_up_remarks", "follow_up_overdue", "section_events", "events"],
+ "actions": [], "allow_rename": 1, "autoname": "format:SHIP-{YYYY}-{#####}", "creation": "2026-09-16 00:00:00.000000", "doctype": "DocType", "engine": "InnoDB",
+ "field_order": ["section_shipment","courier_service_provider","tracking_id","shipment_date","shipment_type","status","column_1","expected_delivery_date","actual_delivery_date","tracking_enabled","tracking_interval_minutes","last_tracked_on","last_movement_on","no_movement","courier_status","current_location","section_party","customer","consignee_name","consignee_phone","consignee_email","address","city","state","pincode","section_reference","company","branch","reference_doctype","reference_name","section_followup","follow_up_required","follow_up_date","follow_up_person","follow_up_status","follow_up_remarks","follow_up_overdue","section_events","events","raw_response"],
  "fields": [
   {"fieldname":"section_shipment","fieldtype":"Section Break","label":"Shipment Details"},
   {"fieldname":"courier_service_provider","fieldtype":"Link","label":"Courier Service Provider","options":"Courier Service Provider","reqd":1,"in_list_view":1},
@@ -17,7 +12,10 @@
   {"fieldname":"expected_delivery_date","fieldtype":"Date","label":"Expected Delivery Date","in_list_view":1},
   {"fieldname":"actual_delivery_date","fieldtype":"Date","label":"Actual Delivery Date"},
   {"default":"1","fieldname":"tracking_enabled","fieldtype":"Check","label":"Tracking Enabled"},
+  {"default":"10","fieldname":"tracking_interval_minutes","fieldtype":"Int","label":"Tracking Interval (Minutes)"},
   {"fieldname":"last_tracked_on","fieldtype":"Datetime","label":"Last Tracked On","read_only":1},
+  {"fieldname":"last_movement_on","fieldtype":"Datetime","label":"Last Movement On","read_only":1},
+  {"default":"0","fieldname":"no_movement","fieldtype":"Check","label":"No Movement / Ageing","read_only":1,"in_list_view":1},
   {"fieldname":"courier_status","fieldtype":"Data","label":"Courier Status","read_only":1},
   {"fieldname":"current_location","fieldtype":"Data","label":"Current Location","read_only":1},
   {"fieldname":"section_party","fieldtype":"Section Break","label":"Consignee"},
@@ -42,19 +40,8 @@
   {"fieldname":"follow_up_remarks","fieldtype":"Small Text","label":"Follow-up Remarks"},
   {"default":"0","fieldname":"follow_up_overdue","fieldtype":"Check","label":"Follow-up Overdue","read_only":1},
   {"fieldname":"section_events","fieldtype":"Section Break","label":"Tracking Timeline"},
-  {"fieldname":"events","fieldtype":"Table","label":"Events","options":"Shipment Event"}
+  {"fieldname":"events","fieldtype":"Table","label":"Events","options":"Shipment Event"},
+  {"fieldname":"raw_response","fieldtype":"Long Text","label":"Last Raw API Response","read_only":1,"hidden":1}
  ],
- "index_web_pages_for_search": 0,
- "links": [],
- "modified": "2026-09-16 00:00:00.000000",
- "modified_by": "Administrator",
- "module": "Manage Shipment",
- "name": "Shipment",
- "owner": "Administrator",
- "permissions": [{"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1}],
- "sort_field": "modified",
- "sort_order": "DESC",
- "states": [],
- "title_field": "tracking_id",
- "track_changes": 1
+ "index_web_pages_for_search": 0, "links": [], "module": "Manage Shipment", "name": "Shipment", "owner": "Administrator", "permissions": [{"create":1,"delete":1,"email":1,"export":1,"print":1,"read":1,"report":1,"role":"System Manager","share":1,"write":1}], "sort_field": "modified", "sort_order": "DESC", "states": [], "title_field": "tracking_id", "track_changes": 1
 }
