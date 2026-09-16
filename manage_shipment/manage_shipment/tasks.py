@@ -7,7 +7,7 @@ FINAL_STATUSES = ("Delivered", "RTO Delivered", "Cancelled")
 def track_shipments():
     if not frappe.db.exists("DocType", "Shipment"):
         return
-    shipments = frappe.get_all("Shipment", filters={"tracking_enabled": 1, "status": ["not in", list(FINAL_STATUSES)]}, fields=["name", "last_tracked_on"], limit=200)
+    shipments = frappe.get_all("Shipment", filters={"tracking_enabled": 1, "status": ["not in", list(FINAL_STATUSES)]}, fields=["name"], limit=200)
     for row in shipments:
         frappe.enqueue("manage_shipment.manage_shipment.api.refresh_shipment", shipment=row.name, queue="short", dedupe=True)
     mark_aged_shipments()
@@ -15,9 +15,11 @@ def track_shipments():
 
 def mark_aged_shipments():
     cutoff = add_days(now_datetime(), -1)
-    rows = frappe.get_all("Shipment", filters={"tracking_enabled": 1, "status": ["not in", list(FINAL_STATUSES)], "last_tracked_on": ["<", cutoff]}, fields=["name"], limit=500)
+    rows = frappe.get_all("Shipment", filters={"tracking_enabled": 1, "status": ["not in", list(FINAL_STATUSES)]}, fields=["name", "last_movement_on", "last_tracked_on", "follow_up_required"], limit=1000)
     for row in rows:
-        frappe.db.set_value("Shipment", row.name, {"follow_up_required": 1, "follow_up_overdue": 1, "follow_up_status": "Pending"}, update_modified=False)
+        last_activity = row.last_movement_on or row.last_tracked_on
+        if last_activity and last_activity < cutoff:
+            frappe.db.set_value("Shipment", row.name, {"no_movement": 1, "follow_up_required": 1, "follow_up_overdue": 1}, update_modified=False)
     frappe.db.commit()
 
 
