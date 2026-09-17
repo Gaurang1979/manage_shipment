@@ -25,6 +25,22 @@ def refresh_shipment(shipment):
         frappe.throw(_("Tracking failed. Check Error Log for shipment {0}.").format(doc.name))
 
 @frappe.whitelist()
+def test_tracking_integration(integration_name, tracking_id):
+    """Test an enabled tracking integration with a real AWB without creating a Shipment."""
+    if not integration_name or not tracking_id:
+        frappe.throw(_("Integration and Tracking / AWB Number are required."))
+    integration = frappe.get_doc("Tracking API Integration", integration_name)
+    if not integration.enabled:
+        frappe.throw(_("Enable the integration before testing it."))
+    from manage_shipment.manage_shipment.integrations.shiprocket import ShiprocketAdapter
+    provider = frappe._dict({"tracking_integration": integration.name, "tracking_source": integration.integration_type, "enabled": 1, "tracking_enabled": 1})
+    if integration.name.lower() == "shiprocket":
+        result = ShiprocketAdapter(provider).track(tracking_id)
+    else:
+        frappe.throw(_("No test adapter is registered for {0} yet.").format(integration.name))
+    return {"ok": True, "status": result.get("status"), "courier_status": result.get("courier_status"), "current_location": result.get("current_location"), "message": _("Tracking API connection successful.")}
+
+@frappe.whitelist()
 def bulk_refresh_shipments(shipments):
     if isinstance(shipments, str): shipments = json.loads(shipments)
     if not isinstance(shipments, list) or not shipments: frappe.throw(_("Select at least one shipment."))
