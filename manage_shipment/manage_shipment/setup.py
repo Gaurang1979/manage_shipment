@@ -7,6 +7,17 @@ GENERIC_ADAPTER = "manage_shipment.manage_shipment.integrations.generic.GenericH
 
 def after_install():
     _ensure_shiprocket_integration()
+    _ensure_default_providers()
+    frappe.db.commit()
+
+
+def after_migrate():
+    _rename_existing_providers()
+    _ensure_shiprocket_integration()
+    frappe.db.commit()
+
+
+def _ensure_default_providers():
     for provider_name, provider_code in DEFAULT_PROVIDERS:
         name = frappe.db.get_value("Courier Service Provider", {"provider_name": provider_name}, "name")
         values = {
@@ -15,14 +26,27 @@ def after_install():
             "tracking_integration": "Shiprocket",
             "adapter_path": SHIPROCKET_ADAPTER,
             "tracking_enabled": 1,
-            "integration_enabled": 0,
         }
         if not name:
             values.update({"doctype": "Courier Service Provider", "provider_name": provider_name, "enabled": 1})
             frappe.get_doc(values).insert(ignore_permissions=True)
         else:
             frappe.db.set_value("Courier Service Provider", name, values, update_modified=False)
-    frappe.db.commit()
+
+
+def _rename_existing_providers():
+    providers = frappe.get_all("Courier Service Provider", fields=["name", "provider_name"], order_by="creation asc")
+    for row in providers:
+        old_name = row.name
+        provider_name = (row.provider_name or "").strip()
+        if not provider_name or old_name == provider_name:
+            continue
+        if frappe.db.exists("Courier Service Provider", provider_name):
+            continue
+        try:
+            frappe.rename_doc("Courier Service Provider", old_name, provider_name, merge=False, force=False)
+        except Exception:
+            frappe.log_error(frappe.get_traceback(), f"Manage Shipment provider rename failed: {old_name} -> {provider_name}")
 
 
 def _ensure_shiprocket_integration():
