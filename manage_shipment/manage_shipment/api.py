@@ -26,7 +26,6 @@ def refresh_shipment(shipment):
 
 @frappe.whitelist()
 def test_tracking_integration(integration_name, tracking_id):
-    """Test an enabled tracking integration with a real AWB without creating a Shipment."""
     if not integration_name or not tracking_id:
         frappe.throw(_("Integration and Tracking / AWB Number are required."))
     integration = frappe.get_doc("Tracking API Integration", integration_name)
@@ -70,6 +69,9 @@ def get_dashboard_data(courier=None, status=None, company=None, follow_up=None, 
     elif from_date: filters["shipment_date"] = [">=", getdate(from_date)]
     elif to_date: filters["shipment_date"] = ["<=", getdate(to_date)]
     rows = frappe.get_all("Shipment", filters=filters, fields=["name","tracking_id","courier_service_provider","consignee_name","customer","status","courier_status","current_location","expected_delivery_date","actual_delivery_date","last_tracked_on","follow_up_required","follow_up_date","follow_up_overdue","no_movement","company"], order_by="modified desc", limit=500)
+    provider_names = {p.name: p.provider_name for p in frappe.get_all("Courier Service Provider", fields=["name", "provider_name"], limit_page_length=500)}
+    for row in rows:
+        row.courier_service_provider_name = provider_names.get(row.courier_service_provider, row.courier_service_provider or "")
     counts = {"Total Shipments": len(rows)}
     for key in ("In Transit","Out for Delivery","Delivered","NDR / Delivery Exception","Delayed","RTO Initiated","RTO In Transit","RTO Delivered"): counts[key] = sum(1 for row in rows if row.status == key)
     counts["Follow-up Required"] = sum(1 for row in rows if row.follow_up_required)
