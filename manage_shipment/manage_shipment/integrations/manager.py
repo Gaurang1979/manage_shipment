@@ -20,8 +20,6 @@ def get_adapter(provider_name):
         provider.tracking_integration_doc = integration
         if integration.integration_name.lower() == "shiprocket":
             path = SHIPROCKET_ADAPTER
-    elif not provider.integration_enabled:
-        return None
 
     if not path:
         return None

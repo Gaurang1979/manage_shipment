@@ -1,7 +1,9 @@
 import json
 import frappe
 from frappe import _
-from frappe.utils import getdate, now_datetime
+from frappe.utils import add_to_date, cint, getdate, now_datetime
+
+from manage_shipment.manage_shipment.notify import notify_escalation
 
 FINAL_STATUSES = ("Delivered", "RTO Delivered", "Cancelled")
 
@@ -14,11 +16,13 @@ def refresh_shipment(shipment):
     try:
         adapter = get_adapter(doc.courier_service_provider)
         if not adapter:
-            doc.last_tracked_on = now_datetime(); doc.save(ignore_permissions=True)
+            doc.last_tracked_on = now_datetime(); doc.save()
             return {"status": doc.status, "message": _("No integration is configured for this courier yet.")}
         result = adapter.track(doc.tracking_id, doc=doc) or {}
-        _apply_tracking_result(doc, result)
-        doc.last_tracked_on = now_datetime(); doc.save(ignore_permissions=True)
+        newly_needs_follow_up = _apply_tracking_result(doc, result)
+        doc.last_tracked_on = now_datetime(); doc.save()
+        if newly_needs_follow_up:
+            notify_escalation(doc, _("Follow-up required"))
         return result
     except Exception:
         frappe.log_error(frappe.get_traceback(), f"Shipment tracking failed: {doc.name}")
@@ -59,7 +63,7 @@ def get_tracking_url(shipment):
     return template.replace("{tracking_id}", doc.tracking_id or "") if template else None
 
 @frappe.whitelist()
-def get_dashboard_data(courier=None, status=None, company=None, follow_up=None, from_date=None, to_date=None):
+def get_dashboard_data(courier=None, status=None, company=None, follow_up=None, from_date=None, to_date=None, start=0, page_length=200):
     filters = {}
     if courier: filters["courier_service_provider"] = courier
     if status: filters["status"] = status
@@ -68,17 +72,33 @@ def get_dashboard_data(courier=None, status=None, company=None, follow_up=None, 
     if from_date and to_date: filters["shipment_date"] = ["between", [getdate(from_date), getdate(to_date)]]
     elif from_date: filters["shipment_date"] = [">=", getdate(from_date)]
     elif to_date: filters["shipment_date"] = ["<=", getdate(to_date)]
-    rows = frappe.get_all("Shipment", filters=filters, fields=["name","tracking_id","courier_service_provider","consignee_name","customer","status","courier_status","current_location","expected_delivery_date","actual_delivery_date","last_tracked_on","follow_up_required","follow_up_date","follow_up_overdue","no_movement","company"], order_by="modified desc", limit=500)
-    provider_names = {p.name: p.provider_name for p in frappe.get_all("Courier Service Provider", fields=["name", "provider_name"], limit_page_length=500)}
+
+    start = cint(start)
+    page_length = min(cint(page_length) or 200, 500)
+
+    total = frappe.db.count("Shipment", filters=filters)
+    rows = frappe.get_all(
+        "Shipment", filters=filters,
+        fields=["name","tracking_id","courier_service_provider","consignee_name","customer","status","courier_status","current_location","expected_delivery_date","actual_delivery_date","last_tracked_on","follow_up_required","follow_up_date","follow_up_overdue","no_movement","company"],
+        order_by="modified desc", start=start, page_length=page_length,
+    )
+    provider_names = {p.name: p.provider_name for p in frappe.get_all("Courier Service Provider", fields=["name", "provider_name"], limit_page_length=0)}
     for row in rows:
         row.courier_service_provider_name = provider_names.get(row.courier_service_provider, row.courier_service_provider or "")
-    counts = {"Total Shipments": len(rows)}
-    for key in ("In Transit","Out for Delivery","Delivered","NDR / Delivery Exception","Delayed","RTO Initiated","RTO In Transit","RTO Delivered"): counts[key] = sum(1 for row in rows if row.status == key)
-    counts["Follow-up Required"] = sum(1 for row in rows if row.follow_up_required)
-    counts["Follow-up Overdue"] = sum(1 for row in rows if row.follow_up_overdue)
-    counts["Not Updated 24h+"] = sum(1 for row in rows if row.last_tracked_on and (now_datetime() - row.last_tracked_on).total_seconds() > 86400)
-    counts["No Movement"] = sum(1 for row in rows if row.no_movement)
-    return {"counts": counts, "rows": rows}
+
+    # Counts are queried against the full filtered set, independent of the page window above,
+    # so KPIs stay accurate regardless of how many shipments are being paged through.
+    counts = {"Total Shipments": total}
+    status_lookup = {r.status: r.count for r in frappe.get_all("Shipment", filters=filters, fields=["status", "count(name) as count"], group_by="status")}
+    for key in ("In Transit","Out for Delivery","Delivered","NDR / Delivery Exception","Delayed","RTO Initiated","RTO In Transit","RTO Delivered"):
+        counts[key] = status_lookup.get(key, 0)
+    counts["Follow-up Required"] = frappe.db.count("Shipment", filters={**filters, "follow_up_required": 1})
+    counts["Follow-up Overdue"] = frappe.db.count("Shipment", filters={**filters, "follow_up_overdue": 1})
+    counts["No Movement"] = frappe.db.count("Shipment", filters={**filters, "no_movement": 1})
+    stale_cutoff = add_to_date(now_datetime(), hours=-24)
+    counts["Not Updated 24h+"] = frappe.db.count("Shipment", filters={**filters, "last_tracked_on": ["<", stale_cutoff]})
+
+    return {"counts": counts, "rows": rows, "start": start, "page_length": page_length, "total": total}
 
 def _apply_tracking_result(doc, result):
     previous_status = doc.status
@@ -96,10 +116,13 @@ def _apply_tracking_result(doc, result):
     if result.get("raw_response"):
         doc.raw_response = frappe.as_json(result["raw_response"])
     if doc.status in FINAL_STATUSES: doc.tracking_enabled = 0
+    newly_needs_follow_up = False
     if doc.status != previous_status and doc.status in ("NDR / Delivery Exception","Address Issue","Customer Unavailable","Delayed","Lost","Held","Delivery Attempted"):
+        newly_needs_follow_up = not doc.follow_up_required
         doc.follow_up_required = 1
         if not doc.follow_up_date: doc.follow_up_date = getdate()
         if not doc.follow_up_status: doc.follow_up_status = "Pending"
+    return newly_needs_follow_up
 
 def _duplicate_event(doc, event):
     timestamp = str(event.get("event_datetime") or ""); status = event.get("status") or ""; location = event.get("location") or ""

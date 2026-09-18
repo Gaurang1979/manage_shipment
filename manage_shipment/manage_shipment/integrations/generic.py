@@ -18,10 +18,8 @@ class GenericHTTPAdapter(CourierAdapter):
         has_placeholder = "{tracking_id}" in raw_url
         url = raw_url.replace("{tracking_id}", requests.utils.quote(tracking_id, safe=""))
         headers = {"Accept": "application/json"}
-        token = provider.api_token or provider.api_key
-        if token:
-            headers["Authorization"] = f"Bearer {token}"
-            headers["X-API-Key"] = token
+        token = provider.get_password("api_token") if provider.api_token else (provider.get_password("api_key") if provider.api_key else None)
+        headers.update(self.build_auth_headers(provider.auth_header_style, provider.auth_header_name, token))
         if provider.extra_headers:
             try: headers.update(json.loads(provider.extra_headers))
             except Exception: frappe.throw(frappe._("Extra Headers must contain valid JSON."))
@@ -34,6 +32,20 @@ class GenericHTTPAdapter(CourierAdapter):
             response = requests.get(url, params=payload, headers=headers, timeout=30)
         response.raise_for_status()
         return self.parse_response(response.json())
+
+    @staticmethod
+    def build_auth_headers(style, header_name, token):
+        """Build auth headers per the provider's configured style. Pure function - no Frappe context needed."""
+        if not token:
+            return {}
+        style = (style or "Bearer Token").strip()
+        header_name = (header_name or "X-API-Key").strip() or "X-API-Key"
+        headers = {}
+        if style in ("Bearer Token", "Both"):
+            headers["Authorization"] = f"Bearer {token}"
+        if style in ("Custom Header", "Both"):
+            headers[header_name] = token
+        return headers
 
     def parse_response(self, payload):
         records = payload if isinstance(payload, list) else payload.get("data", payload) if isinstance(payload, dict) else {}

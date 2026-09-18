@@ -5,7 +5,11 @@ def create_shipment_from_delivery_note(doc, method=None):
     """Create/update Shipment when a Delivery Note has courier + AWB fields."""
     if not getattr(doc, "shipment_tracking_id", None) or not getattr(doc, "shipment_courier_service_provider", None):
         return
-    existing = frappe.db.get_value("Shipment", {"tracking_id": doc.shipment_tracking_id}, "name")
+    existing = frappe.db.get_value(
+        "Shipment",
+        {"tracking_id": doc.shipment_tracking_id, "courier_service_provider": doc.shipment_courier_service_provider},
+        "name",
+    )
     if existing:
         shipment = frappe.get_doc("Shipment", existing)
         shipment.reference_doctype = "Delivery Note"
