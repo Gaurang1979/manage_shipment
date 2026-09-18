@@ -19,7 +19,6 @@ def track_shipments():
     )
     for row in shipments:
         frappe.enqueue("manage_shipment.manage_shipment.api.refresh_shipment", shipment=row.name, queue="short", dedupe=True)
-    mark_aged_shipments()
 
 
 def mark_aged_shipments():

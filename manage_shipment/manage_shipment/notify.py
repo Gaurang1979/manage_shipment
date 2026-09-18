@@ -26,7 +26,7 @@ def notify_escalation(shipment_doc, reason):
         f"<b>Status:</b> {escape_html(shipment_doc.status or '')}<br>"
         f"<b>Courier Status:</b> {escape_html(shipment_doc.courier_status or '')}<br>"
         f"<b>Location:</b> {escape_html(shipment_doc.current_location or '')}</p>"
-        f"<p><a href='/app/shipment/{frappe.utils.quote(shipment_doc.name)}'>Open Shipment</a></p>"
+        f"<p><a href='{frappe.utils.get_url_to_form('Shipment', shipment_doc.name)}'>Open Shipment</a></p>"
     )
     try:
         frappe.sendmail(recipients=recipients, subject=subject, message=message, now=False)

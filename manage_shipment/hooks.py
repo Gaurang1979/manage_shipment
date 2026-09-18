@@ -13,4 +13,4 @@ app_include_css = "/assets/manage_shipment/css/manage_shipment.css"
 doctype_js = {"Shipment": "public/js/shipment.js", "Tracking API Integration": "public/js/tracking_api_integration.js"}
 fixtures = [{"dt": "Custom Field", "filters": [["module", "=", "Manage Shipment"]]}]
 doc_events = {"Delivery Note": {"on_submit": "manage_shipment.manage_shipment.doctype_events.create_shipment_from_delivery_note"}}
-scheduler_events = {"cron": {"*/10 * * * *": ["manage_shipment.manage_shipment.tasks.track_shipments"], "5 * * * *": ["manage_shipment.manage_shipment.tasks.update_follow_up_flags"]}}
+scheduler_events = {"cron": {"*/10 * * * *": ["manage_shipment.manage_shipment.tasks.track_shipments"], "5 * * * *": ["manage_shipment.manage_shipment.tasks.update_follow_up_flags"], "20 * * * *": ["manage_shipment.manage_shipment.tasks.mark_aged_shipments"]}}
