@@ -12,6 +12,20 @@ class CourierAdapter:
     def track(self, tracking_id, doc=None):
         raise NotImplementedError
 
+    def get_rates(self, params):
+        """params: dict with pickup_pincode, delivery_pincode, weight (kg), cod (bool),
+        order_amount. Returns a list of dicts: [{courier_name, courier_id, rate,
+        estimated_days, raw}, ...]."""
+        raise NotImplementedError(f"{type(self).__name__} does not support rate checking.")
+
+    def create_shipment(self, params):
+        """params: dict with order_reference, pickup_location, consignee (name, phone,
+        email, address, city, state, pincode), weight, length, breadth, height,
+        payment_mode (Prepaid/COD), order_amount, cod_amount, courier_id (optional -
+        from a prior get_rates() call), items (optional list of {name, sku, qty, price}).
+        Returns a dict: {tracking_id, courier_name, raw}."""
+        raise NotImplementedError(f"{type(self).__name__} does not support shipment creation.")
+
     @staticmethod
     def normalize_status(status, mapping=None):
         value = str(status or "").strip()

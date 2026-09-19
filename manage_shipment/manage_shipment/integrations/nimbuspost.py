@@ -9,6 +9,8 @@ from .base import CourierAdapter
 DEFAULT_BASE_URL = "https://api-v2.nimbuspost.com"
 AUTH_PATH = "/v2/users/login"
 TRACK_PATH = "/v2/tracking/bulk"
+RATE_PATH = "/v2/courier/serviceability"
+CREATE_PATH = "/v2/shipments"
 
 
 class NimbusPostAdapter(CourierAdapter):
@@ -92,6 +94,83 @@ class NimbusPostAdapter(CourierAdapter):
         response = requests.post(url, json={"awb": [tracking_id]}, headers=headers, timeout=30)
         response.raise_for_status()
         return self.parse_response(response.json(), tracking_id)
+
+    def get_rates(self, params):
+        """CONFIDENCE NOTE: the endpoint path (/v2/courier/serviceability) is confirmed
+        from NimbusPost's official SDK (CourierModule::getCourierServiceability). The
+        request/response field names below are NOT confirmed against actual v2 docs
+        (their reference site is JS-rendered) - they follow the same convention as the
+        confirmed request/response shapes elsewhere in this API (pincode/weight/cod,
+        wrapped data envelope). Verify the real field names against your account's
+        interactive docs before relying on this for real quotes, and adjust below if
+        the response comes back empty despite a 200."""
+        integration = self._integration()
+        token = self._token(integration)
+        url = (integration.tracking_url and self._base_url(integration) + RATE_PATH) or self._base_url(integration) + RATE_PATH
+        payload = {
+            "pickup_pincode": params["pickup_pincode"],
+            "delivery_pincode": params["delivery_pincode"],
+            "weight": params["weight"],
+            "cod": 1 if params.get("cod") else 0,
+            "order_amount": params.get("order_amount") or 0,
+        }
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+        response = requests.post(url, json=payload, headers=headers, timeout=30)
+        response.raise_for_status()
+        result = response.json()
+        companies = result.get("data") if isinstance(result.get("data"), list) else (result.get("couriers") or result.get("services") or [])
+        return [{
+            "courier_name": c.get("name") or c.get("courier_name") or c.get("courier") or "",
+            "courier_id": c.get("id") or c.get("courier_id"),
+            "rate": c.get("total_charges") or c.get("rate") or c.get("charge") or 0,
+            "estimated_days": c.get("etd") or c.get("estimated_delivery_days") or c.get("tat") or "",
+            "raw": c,
+        } for c in companies if isinstance(c, dict)]
+
+    def create_shipment(self, params):
+        """CONFIDENCE NOTE: same caveat as get_rates() - endpoint path confirmed
+        (/v2/shipments, from ShipmentModule::createShipment in the official SDK),
+        payload field names are a best-effort reconstruction, NOT verified against
+        actual v2 docs. Test with one real (low-value) order before relying on this,
+        and check the raw response captured on the Shipment if the AWB comes back
+        empty or looks wrong."""
+        integration = self._integration()
+        token = self._token(integration)
+        consignee = params["consignee"]
+        payload = {
+            "order_number": params["order_reference"],
+            "payment_type": "cod" if params.get("payment_mode") == "COD" else "prepaid",
+            "order_amount": params.get("order_amount") or 0,
+            "package_weight": params.get("weight") or 0.5,
+            "package_length": params.get("length") or 10,
+            "package_breadth": params.get("breadth") or 10,
+            "package_height": params.get("height") or 10,
+            "consignee": consignee.get("name") or "",
+            "consignee_address": consignee.get("address") or "",
+            "consignee_city": consignee.get("city") or "",
+            "consignee_state": consignee.get("state") or "",
+            "consignee_pincode": consignee.get("pincode") or "",
+            "consignee_phone": consignee.get("phone") or "",
+            "consignee_email": consignee.get("email") or "",
+            "pickup_location": params.get("pickup_location") or "",
+            "cod_amount": params.get("cod_amount") or 0,
+            "courier_id": params.get("courier_id"),
+        }
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+        response = requests.post(self._base_url(integration) + CREATE_PATH, json=payload, headers=headers, timeout=30)
+        response.raise_for_status()
+        result = response.json()
+        data = result.get("data") if isinstance(result.get("data"), dict) else result
+        awb = data.get("awb") or data.get("awb_number") or data.get("tracking_id")
+        courier_name = data.get("courier_name") or data.get("courier") or ""
+        if not awb:
+            frappe.throw(frappe._(
+                "NimbusPost shipment creation returned HTTP {0} but no AWB was found in the "
+                "response. This likely means the request field names need adjusting - "
+                "raw response: {1}"
+            ).format(response.status_code, json.dumps(result)[:1000]))
+
+        return {"tracking_id": awb, "courier_name": courier_name, "raw": result}
 
     def parse_response(self, payload, tracking_id):
         record = self._find_record(payload, tracking_id)

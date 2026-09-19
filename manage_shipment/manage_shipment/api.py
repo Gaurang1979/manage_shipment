@@ -127,3 +127,117 @@ def _apply_tracking_result(doc, result):
 def _duplicate_event(doc, event):
     timestamp = str(event.get("event_datetime") or ""); status = event.get("status") or ""; location = event.get("location") or ""
     return any(str(row.event_datetime) == timestamp and row.status == status and row.location == location for row in doc.events)
+
+
+def _get_booking_adapter(integration):
+    if not integration.enabled:
+        frappe.throw(_("Tracking integration {0} is disabled.").format(integration.name))
+    path = (integration.adapter_path or "").strip()
+    if not path:
+        frappe.throw(_("Set Adapter Python Path on Tracking API Integration {0} before using it for Check Rates / Create Shipment.").format(integration.name))
+    try:
+        adapter_class = frappe.get_attr(path)
+    except Exception:
+        frappe.throw(_("Could not import adapter {0} - check the Adapter Python Path.").format(path))
+    provider_stub = frappe._dict({"tracking_integration": integration.name})
+    return adapter_class(provider_stub)
+
+
+def _consignee_params(doc):
+    return {
+        "name": doc.consignee_name or doc.customer or "",
+        "phone": doc.consignee_phone or "",
+        "email": doc.consignee_email or "",
+        "address": doc.address or "",
+        "city": doc.city or "",
+        "state": doc.state or "",
+        "pincode": doc.pincode or "",
+    }
+
+
+@frappe.whitelist()
+def get_shipping_rates(shipment):
+    doc = frappe.get_doc("Shipment", shipment)
+    doc.check_permission("write")
+    if not doc.booking_integration:
+        frappe.throw(_("Set Booking Integration before checking rates."))
+    if not doc.pincode:
+        frappe.throw(_("Set the consignee Pincode before checking rates."))
+    if not doc.pickup_pincode:
+        frappe.throw(_("Set Pickup Pincode before checking rates."))
+    if not doc.package_weight:
+        frappe.throw(_("Set Weight (kg) before checking rates."))
+
+    integration = frappe.get_cached_doc("Tracking API Integration", doc.booking_integration)
+    adapter = _get_booking_adapter(integration)
+    rates = adapter.get_rates({
+        "pickup_pincode": doc.pickup_pincode,
+        "delivery_pincode": doc.pincode,
+        "weight": doc.package_weight,
+        "cod": doc.payment_mode == "COD",
+        "order_amount": doc.order_amount,
+    })
+    return rates
+
+
+@frappe.whitelist()
+def create_shipment_booking(shipment, courier_name=None, courier_id=None):
+    doc = frappe.get_doc("Shipment", shipment)
+    doc.check_permission("write")
+    if doc.tracking_id:
+        frappe.throw(_("This Shipment already has a Tracking / AWB Number ({0}) - booking again is not supported here.").format(doc.tracking_id))
+    if not doc.booking_integration:
+        frappe.throw(_("Set Booking Integration before creating a shipment."))
+    if not doc.pickup_location:
+        frappe.throw(_("Set Pickup Location before creating a shipment."))
+    for label, value in ((_("Weight (kg)"), doc.package_weight), (_("Pincode"), doc.pincode), (_("Consignee Name"), doc.consignee_name), (_("Address"), doc.address)):
+        if not value:
+            frappe.throw(_("Set {0} before creating a shipment.").format(label))
+
+    integration = frappe.get_cached_doc("Tracking API Integration", doc.booking_integration)
+    adapter = _get_booking_adapter(integration)
+    result = adapter.create_shipment({
+        "order_reference": doc.reference_name or doc.name,
+        "pickup_location": doc.pickup_location,
+        "consignee": _consignee_params(doc),
+        "weight": doc.package_weight,
+        "length": doc.package_length,
+        "breadth": doc.package_breadth,
+        "height": doc.package_height,
+        "payment_mode": doc.payment_mode,
+        "order_amount": doc.order_amount,
+        "cod_amount": doc.cod_amount,
+        "courier_id": courier_id,
+    })
+
+    doc.tracking_id = result["tracking_id"]
+    doc.raw_response = frappe.as_json(result.get("raw"))
+    matched = _match_courier_provider(integration.name, courier_name or result.get("courier_name"))
+    warning = None
+    if matched:
+        doc.courier_service_provider = matched
+        doc.tracking_enabled = 1
+    else:
+        warning = _(
+            "Shipment booked (AWB: {0}) but no Courier Service Provider matching '{1}' "
+            "was found for this integration - set Courier Service Provider manually so "
+            "automatic tracking picks it up."
+        ).format(result["tracking_id"], courier_name or result.get("courier_name") or "?")
+    doc.save()
+    return {"tracking_id": result["tracking_id"], "courier_name": courier_name or result.get("courier_name"), "warning": warning}
+
+
+def _match_courier_provider(integration_name, courier_name):
+    if not courier_name:
+        return None
+    needle = str(courier_name).strip().lower()
+    candidates = frappe.get_all(
+        "Courier Service Provider",
+        filters={"tracking_source": "Aggregator", "tracking_integration": integration_name},
+        fields=["name", "provider_name"],
+    )
+    for row in candidates:
+        provider_lower = (row.provider_name or "").strip().lower()
+        if provider_lower and (provider_lower in needle or needle in provider_lower):
+            return row.name
+    return None

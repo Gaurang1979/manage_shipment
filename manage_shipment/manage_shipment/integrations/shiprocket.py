@@ -72,6 +72,83 @@ class ShiprocketAdapter(CourierAdapter):
         response.raise_for_status()
         return self.parse_response(response.json())
 
+    def get_rates(self, params):
+        integration = self._integration()
+        token = self._token(integration)
+        url = self._base_url() + "/v1/external/courier/serviceability/"
+        query = {
+            "pickup_postcode": params["pickup_pincode"],
+            "delivery_postcode": params["delivery_pincode"],
+            "weight": params["weight"],
+            "cod": 1 if params.get("cod") else 0,
+        }
+        if params.get("order_amount"):
+            query["declared_value"] = params["order_amount"]
+
+        response = requests.get(url, params=query, headers={"Accept": "application/json", "Authorization": f"Bearer {token}"}, timeout=30)
+        response.raise_for_status()
+        payload = response.json()
+        companies = ((payload.get("data") or {}).get("available_courier_companies") or [])
+        return [{
+            "courier_name": c.get("courier_name") or c.get("name") or "",
+            "courier_id": c.get("courier_company_id") or c.get("id"),
+            "rate": c.get("rate") or c.get("freight_charge") or 0,
+            "estimated_days": c.get("etd") or c.get("estimated_delivery_days") or "",
+            "raw": c,
+        } for c in companies]
+
+    def create_shipment(self, params):
+        integration = self._integration()
+        token = self._token(integration)
+        headers = {"Accept": "application/json", "Content-Type": "application/json", "Authorization": f"Bearer {token}"}
+
+        consignee = params["consignee"]
+        order_payload = {
+            "order_id": params["order_reference"],
+            "order_date": frappe.utils.nowdate(),
+            "pickup_location": params["pickup_location"],
+            "billing_customer_name": consignee.get("name") or "",
+            "billing_last_name": "",
+            "billing_address": consignee.get("address") or "",
+            "billing_city": consignee.get("city") or "",
+            "billing_pincode": consignee.get("pincode") or "",
+            "billing_state": consignee.get("state") or "",
+            "billing_country": "India",
+            "billing_email": consignee.get("email") or "noreply@example.com",
+            "billing_phone": consignee.get("phone") or "",
+            "shipping_is_billing": True,
+            "order_items": params.get("items") or [{
+                "name": params.get("order_reference") or "Item",
+                "sku": params.get("order_reference") or "SKU",
+                "units": 1,
+                "selling_price": params.get("order_amount") or 0,
+            }],
+            "payment_method": "COD" if params.get("payment_mode") == "COD" else "Prepaid",
+            "sub_total": params.get("order_amount") or 0,
+            "length": params.get("length") or 10,
+            "breadth": params.get("breadth") or 10,
+            "height": params.get("height") or 10,
+            "weight": params.get("weight") or 0.5,
+        }
+        response = requests.post(self._base_url() + "/v1/external/orders/create/adhoc", json=order_payload, headers=headers, timeout=30)
+        response.raise_for_status()
+        order_result = response.json()
+        shipment_id = order_result.get("shipment_id") or (order_result.get("payload") or {}).get("shipment_id")
+        if not shipment_id:
+            frappe.throw(frappe._("Shiprocket order was created but no shipment_id was returned: {0}").format(json.dumps(order_result)))
+
+        assign_payload = {"shipment_id": [shipment_id], "courier_id": params.get("courier_id") or 0}
+        response = requests.post(self._base_url() + "/v1/external/courier/assign/awb", json=assign_payload, headers=headers, timeout=30)
+        response.raise_for_status()
+        assign_result = response.json()
+        data = assign_result.get("response", {}).get("data", {}) if isinstance(assign_result.get("response"), dict) else (assign_result.get("data") or {})
+        awb = data.get("awb_code") or assign_result.get("awb_code")
+        courier_name = data.get("courier_name") or assign_result.get("courier_name") or ""
+        if not awb:
+            frappe.throw(frappe._("Shiprocket order {0} was created (shipment_id {1}) but AWB assignment did not return an AWB: {2}").format(order_result.get("order_id"), shipment_id, json.dumps(assign_result)))
+
+        return {"tracking_id": awb, "courier_name": courier_name, "raw": {"order": order_result, "awb_assign": assign_result}}
+
     def parse_response(self, payload):
         shipment = self._first_dict(payload, ("shipment_track", "shipment_track_activities", "tracking_data", "data"))
         activities = self._find_list(payload, ("shipment_track_activities", "track_activities", "activities"))
