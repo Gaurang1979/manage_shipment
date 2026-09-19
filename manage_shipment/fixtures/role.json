@@ -1,0 +1,10 @@
+[
+  {
+    "doctype": "Role",
+    "name": "Shipment User",
+    "role_name": "Shipment User",
+    "desk_access": 1,
+    "disabled": 0,
+    "is_custom": 1
+  }
+]
