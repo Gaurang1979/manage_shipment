@@ -241,3 +241,37 @@ def _match_courier_provider(integration_name, courier_name):
         if provider_lower and (provider_lower in needle or needle in provider_lower):
             return row.name
     return None
+
+
+@frappe.whitelist()
+def quick_add_shipment(tracking_id, courier_service_provider, consignee_name=None, consignee_phone=None, company=None):
+    """For an AWB already booked elsewhere (courier's own portal, WhatsApp booking,
+    another platform, etc.) - just start tracking it. Used by the dashboard's
+    Add Shipment dialog; no rate-check/booking fields required."""
+    tracking_id = (tracking_id or "").strip()
+    if not tracking_id:
+        frappe.throw(_("Tracking / AWB Number is required."))
+    if not courier_service_provider:
+        frappe.throw(_("Courier is required."))
+    if frappe.db.exists("Shipment", {"tracking_id": tracking_id, "courier_service_provider": courier_service_provider}):
+        frappe.throw(_("A Shipment with this Tracking ID and Courier already exists."))
+
+    doc = frappe.get_doc({
+        "doctype": "Shipment",
+        "tracking_id": tracking_id,
+        "courier_service_provider": courier_service_provider,
+        "consignee_name": consignee_name,
+        "consignee_phone": consignee_phone,
+        "company": company or frappe.defaults.get_user_default("Company"),
+        "shipment_date": frappe.utils.nowdate(),
+        "status": "Created",
+        "tracking_enabled": 1,
+    })
+    doc.insert()
+
+    try:
+        refresh_shipment(doc.name)
+    except Exception:
+        frappe.log_error(frappe.get_traceback(), f"Manage Shipment quick_add_shipment first refresh failed: {doc.name}")
+
+    return doc.name

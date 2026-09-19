@@ -20,6 +20,7 @@ frappe.pages['shipment-dashboard'].on_page_load = function(wrapper) {
 
     root.find('.btn-new-shipment').on('click', () => frappe.new_doc('Shipment'));
     root.find('.btn-bulk-refresh').on('click', bulk_refresh);
+    root.find('.btn-quick-add').on('click', () => quick_add_shipment());
     [courier,status,follow_up,company,from_date,to_date].forEach(c => c.$input && c.$input.on('change', () => load(true)));
 
     // Event delegation: rows are replaced/appended on every load(), so bind on the
@@ -59,6 +60,34 @@ frappe.pages['shipment-dashboard'].on_page_load = function(wrapper) {
     }
     function status_class(v){if(v==='Delivered'||v==='RTO Delivered')return'green';if(['Delayed','NDR / Delivery Exception','Lost','Address Issue'].includes(v))return'red';if(v==='Out for Delivery')return'orange';return'blue';}
     function bulk_refresh(){const names=[];root.find('.shipment-select:checked').each(function(){names.push($(this).data('name'));});if(!names.length){frappe.msgprint(__('Select at least one shipment.'));return;}frappe.call({method:'manage_shipment.manage_shipment.api.bulk_refresh_shipments',args:{shipments:names},freeze:true,freeze_message:__('Refreshing shipments...'),callback(){load(true);}});}
+    function quick_add_shipment(){
+        const dialog = new frappe.ui.Dialog({
+            title: __('Add Shipment for Tracking'),
+            fields: [
+                {fieldname: 'tracking_id', fieldtype: 'Data', label: __('Tracking / AWB Number'), reqd: 1},
+                {fieldname: 'courier_service_provider', fieldtype: 'Link', options: 'Courier Service Provider', label: __('Courier'), reqd: 1, get_query: () => ({filters: {enabled: 1}})},
+                {fieldname: 'column_qa', fieldtype: 'Column Break'},
+                {fieldname: 'consignee_name', fieldtype: 'Data', label: __('Consignee Name')},
+                {fieldname: 'consignee_phone', fieldtype: 'Data', label: __('Consignee Phone')},
+                {fieldname: 'company', fieldtype: 'Link', options: 'Company', label: __('Company')}
+            ],
+            primary_action_label: __('Add & Track'),
+            primary_action(values) {
+                frappe.call({
+                    method: 'manage_shipment.manage_shipment.api.quick_add_shipment',
+                    args: values,
+                    freeze: true,
+                    freeze_message: __('Adding shipment and checking tracking...'),
+                    callback(r) {
+                        dialog.hide();
+                        if (r.message) frappe.show_alert({message: __('Shipment {0} added', [r.message]), indicator: 'green'});
+                        load(true);
+                    }
+                });
+            }
+        });
+        dialog.show();
+    }
 
     frappe.call({method:'frappe.client.get_list',args:{doctype:'Courier Service Provider',fields:['name','provider_name'],filters:{enabled:1},limit_page_length:100},callback(r){courier.df.options=[''].concat((r.message||[]).map(x=>x.name));courier.refresh();load(true);}});
     frappe.call({method:'frappe.client.get_list',args:{doctype:'Company',fields:['name'],limit_page_length:100},callback(r){company.df.options=[''].concat((r.message||[]).map(x=>x.name));company.refresh();}});
