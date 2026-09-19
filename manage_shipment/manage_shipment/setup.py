@@ -69,6 +69,7 @@ def after_migrate():
     _apply_legacy_provider_renames()
     _rename_existing_providers()
     _ensure_shiprocket_integration()
+    _backfill_shiprocket_adapter_path()
     # Seed any providers newly added to DEFAULT_PROVIDERS since this site last migrated.
     # Only ever inserts missing rows - never touches a provider that already exists,
     # so nothing here can clobber an already-configured integration.
@@ -127,8 +128,18 @@ def _ensure_shiprocket_integration():
             "enabled": 0,
             "base_url": "https://apiv2.shiprocket.in",
             "auth_url": "https://apiv2.shiprocket.in/v1/external/auth/login",
+            "adapter_path": SHIPROCKET_ADAPTER,
             "tracking_url": "https://apiv2.shiprocket.in/v1/external/courier/track/awb/{tracking_id}",
             "http_method": "GET",
             "tracking_param": "awb_code",
             "notes": "Create a dedicated Shiprocket API user under Settings > API. Enter the API email and password here. Credentials are stored in ERPNext and are not committed to GitHub.",
         }).insert(ignore_permissions=True)
+
+
+def _backfill_shiprocket_adapter_path():
+    # _ensure_shiprocket_integration only inserts a missing record - this fills in
+    # adapter_path on a Shiprocket integration created before that field existed,
+    # without touching anything the user has since configured.
+    name = frappe.db.get_value("Tracking API Integration", {"integration_name": "Shiprocket"}, "name")
+    if name and not frappe.db.get_value("Tracking API Integration", name, "adapter_path"):
+        frappe.db.set_value("Tracking API Integration", name, "adapter_path", SHIPROCKET_ADAPTER, update_modified=False)

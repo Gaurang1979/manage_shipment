@@ -1,5 +1,6 @@
 from manage_shipment.manage_shipment.integrations.base import CourierAdapter
 from manage_shipment.manage_shipment.integrations.generic import GenericHTTPAdapter
+from manage_shipment.manage_shipment.integrations.nimbuspost import NimbusPostAdapter
 
 
 def test_status_normalization():
@@ -26,3 +27,18 @@ def test_build_auth_headers_both():
 
 def test_build_auth_headers_no_token():
     assert GenericHTTPAdapter.build_auth_headers("Bearer Token", None, None) == {}
+
+
+def test_nimbuspost_find_record_data_list():
+    payload = {"data": [{"awb": "AWB1", "status": "In Transit"}, {"awb": "AWB2", "status": "Delivered"}]}
+    assert NimbusPostAdapter._find_record(payload, "AWB2")["status"] == "Delivered"
+
+
+def test_nimbuspost_find_record_keyed_by_awb():
+    payload = {"data": {"AWB1": {"status": "In Transit"}, "AWB2": {"status": "Delivered"}}}
+    assert NimbusPostAdapter._find_record(payload, "AWB2")["status"] == "Delivered"
+
+
+def test_nimbuspost_find_record_bare_list():
+    payload = [{"awb": "AWB1", "status": "Out for Delivery"}]
+    assert NimbusPostAdapter._find_record(payload, "AWB1")["status"] == "Out for Delivery"
